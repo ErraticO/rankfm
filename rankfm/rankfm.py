@@ -8,10 +8,22 @@ import pandas as pd
 from rankfm._rankfm import _fit, _predict, _recommend
 from rankfm.utils import get_data
 
-class RankFM():
+
+class RankFM:
     """Factorization Machines for Ranking Problems with Implicit Feedback Data"""
 
-    def __init__(self, factors=10, loss='bpr', max_samples=10, alpha=0.01, beta=0.1, sigma=0.1, learning_rate=0.1, learning_schedule='constant', learning_exponent=0.25):
+    def __init__(
+        self,
+        factors=10,
+        loss='bpr',
+        max_samples=10,
+        alpha=0.01,
+        beta=0.1,
+        sigma=0.1,
+        learning_rate=0.1,
+        learning_schedule='constant',
+        learning_exponent=0.25
+    ):
         """store hyperparameters and initialize internal model state
 
         :param factors: latent factor rank
@@ -171,7 +183,7 @@ class RankFM():
             new_user_items = self.interactions.groupby('user_idx')['item_idx'].apply(set).to_dict()
             self.user_items = {user: np.sort(np.array(list(set(self.user_items[user]) | set(new_user_items[user])), dtype=np.int32)) for user in self.user_items.keys()}
         else:
-            self.user_items = self.interactions.sort_values(['user_idx', 'item_idx']).groupby('user_idx')['item_idx'].apply(np.array, dtype=np.int32).to_dict()
+            self.user_items = self.interactions.groupby('user_idx')['item_idx'].unique().apply(np.array, dtype=np.int32).to_dict()
 
         # format the interactions data as a c-contiguous integer array for cython use
         self.interactions = np.ascontiguousarray(self.interactions, dtype=np.int32)
@@ -297,7 +309,7 @@ class RankFM():
             max_samples = self.max_samples
         else:
             raise ValueError('[loss] function not recognized')
-
+        
         # NOTE: the cython private _fit() method updates the model weights in-place via typed memoryviews
         # NOTE: therefore there's nothing returned explicitly by either method
 

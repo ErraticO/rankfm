@@ -16,35 +16,6 @@ import numpy as np
 # --------------------
 # [C] helper functions
 # --------------------
-
-cdef int lsearch(int item, int *items, int n) nogil:
-    """linear search for a given item in a sorted array of items"""
-
-    cdef int i
-    for i in range(n):
-        if item == items[i]:
-            return 1
-    return 0
-
-
-cdef int bsearch(int item, int *items, int n) nogil:
-    """binary search for a given item in a sorted array of items"""
-
-    cdef int lo = 0
-    cdef int hi = n - 1
-    cdef int md
-
-    while lo <= hi:
-        md = int(lo + (hi - lo) / 2)
-        if items[md] == item:
-            return 1
-        elif (items[md] < item):
-            lo = md + 1
-        else:
-            hi = md - 1
-    return 0
-
-
 cdef float compute_ui_utility(
     int F,
     int P,
@@ -197,20 +168,6 @@ def _fit(
     shuffle_index = np.arange(N, dtype=np.int32)
     cdef int[:] shuffle_index_mv = shuffle_index
 
-    # count the total number of items for each user
-    items_user = {user: len(items) for user, items in user_items.items()}
-
-    # create c-arrays: number of items and sorted array of items for each user
-    cdef int *c_items_user = <int*>malloc(U * sizeof(int))
-    cdef int **c_user_items = <int**>malloc(U * sizeof(int*))
-
-    # fill the c-arrays from the P-arrays to use later in NOGIL blocks
-    for u in range(U):
-        c_items_user[u] = items_user[u]
-        c_user_items[u] = <int*>malloc(c_items_user[u] * sizeof(int))
-        for i in range(c_items_user[u]):
-            c_user_items[u][i] = user_items[u][i]
-
     ################################
     ### MAIN TRAINING EPOCH LOOP ###
     ################################
@@ -249,7 +206,7 @@ def _fit(
                 # randomly sample an unobserved item (j) for the user
                 while True:
                     j = mt.genrand_int32() % I
-                    if not lsearch(j, c_user_items[u], c_items_user[u]):
+                    if j not in user_items[u]:
                         break
 
                 # compute the utility score of the unobserved (u, j) pair and the subsequent pairwise utility
@@ -332,12 +289,8 @@ def _fit(
         if verbose:
             penalty = reg_penalty(alpha, beta, w_i, w_if, v_u, v_i, v_uf, v_if)
             log_likelihood = round(log_likelihood - penalty, 2)
-
-    # [end training]: free memory of c-arrays before exiting function
-    for u in range(U):
-        free(c_user_items[u])
-    free(c_items_user)
-    free(c_user_items)
+            print("\ntraining epoch:", epoch)
+            print("log likelihood:", log_likelihood)
 
 
 def _predict(
@@ -402,7 +355,6 @@ def _recommend(
     float[:, ::1] v_uf,
     float[:, ::1] v_if
 ):
-
     # declare variables
     cdef int U, I, P, Q, F
     cdef int x_uf_any, x_if_any
@@ -456,4 +408,3 @@ def _recommend(
             rec_items[row] = selected_items
 
     return rec_items
-
