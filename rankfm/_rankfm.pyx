@@ -1,15 +1,15 @@
-#!python
-#cython: language_level=3, boundscheck=False, wraparound=False, cdivision=True
+# cython: boundscheck=False, wraparound=False, cdivision=True, language_level=3
 
 # -----------------------
 # [C/Python] dependencies
 # -----------------------
-
-from libc.stdlib cimport malloc, free
-from libc.math cimport log, exp, pow
+from libc.math cimport log, exp, pow, isnan
 
 cimport cython
 cimport rankfm.mt19937ar as mt
+
+from cython.parallel import prange
+cimport numpy as cnp
 
 import numpy as np
 
@@ -305,40 +305,39 @@ def _predict(
     float[:, ::1] v_if,
 ):
 
-    # declare variables
-    cdef int N, P, Q, F
-    cdef int x_uf_any, x_if_any
+    cdef int N = pairs.shape[0]
+    cdef int P = v_uf.shape[0]
+    cdef int Q = v_if.shape[0]
+    cdef int F = v_u.shape[1]
+    cdef int x_uf_any = int(np.asarray(x_uf).any())
+    cdef int x_if_any = int(np.asarray(x_if).any())
+
+    cdef cnp.float_t[::1] scores = np.empty(N, dtype=np.float32)
+
     cdef int row, u, i
     cdef float u_flt, i_flt
 
-    # calculate matrix shapes
-    N = pairs.shape[0]
-    P = v_uf.shape[0]
-    Q = v_if.shape[0]
-    F = v_u.shape[1]
+    cdef float nan_value = float('nan')
 
-    # determine whether any user-features/item-features were supplied
-    x_uf_any = int(np.asarray(x_uf).any())
-    x_if_any = int(np.asarray(x_if).any())
-
-    # initialize the output scores vector
-    scores = np.empty(N, dtype=np.float32)
-
-    for row in range(N):
-
-        # locate the user/item to score
+    for row in prange(N, nogil=True):
         u_flt = pairs[row, 0]
         i_flt = pairs[row, 1]
 
-        # set the score to nan if the user or item not found
-        if np.isnan(u_flt) or np.isnan(i_flt):
-            scores[row] = np.nan
+        if isnan(u_flt) or isnan(i_flt):
+            scores[row] = nan_value
         else:
-            # calculate the pointwise utility score for the (u, i) pair
-            u, i = int(u_flt), int(i_flt)
-            scores[row] = compute_ui_utility(F, P, Q, x_uf[u], x_if[i], w_i[i], w_if, v_u[u], v_i[i], v_uf, v_if, x_uf_any, x_if_any)
+            u = <int>u_flt
+            i = <int>i_flt
+            scores[row] = compute_ui_utility(
+                F, P, Q,
+                x_uf[u], x_if[i],
+                w_i[i], w_if,
+                v_u[u], v_i[i],
+                v_uf, v_if,
+                x_uf_any, x_if_any
+            )
 
-    return scores
+    return np.asarray(scores)
 
 
 def _recommend(
@@ -387,7 +386,7 @@ def _recommend(
         else:
             # calculate the scores for all items wrt the current user
             u = int(u_flt)
-            for i in range(I):
+            for i in prange(I, schedule='static', nogil=True):
                 item_scores_mv[i] = compute_ui_utility(F, P, Q, x_uf[u], x_if[i], w_i[i], w_if, v_u[u], v_i[i], v_uf, v_if, x_uf_any, x_if_any)
 
             # get a ranked list of item index positions for the user
