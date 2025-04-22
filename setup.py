@@ -40,17 +40,13 @@ else:
     compile_args = ['/openmp', '/O2']
     link_args = ['/openmp']
 # define the _rankfm extension including the wrapped MT module
-# Delay the numpy import until it's needed
-def get_numpy_include():
-    import numpy
-    return numpy.get_include()
 extensions = [
     Extension(
         name='rankfm._rankfm',
         sources=['rankfm/_rankfm.{ext}'.format(ext=ext), 'rankfm/mt19937ar/mt19937ar.c'],
         extra_compile_args=compile_args,
         extra_link_args=link_args,
-        include_dirs=[get_numpy_include()],
+        include_dirs=[numpy.get_include()],
     )
 ]
 
