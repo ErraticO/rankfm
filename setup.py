@@ -40,12 +40,17 @@ else:
     compile_args = ['/openmp', '/O2']
     link_args = ['/openmp']
 # define the _rankfm extension including the wrapped MT module
+# Delay the numpy import until it's needed
+def get_numpy_include():
+    import numpy
+    return numpy.get_include()
 extensions = [
     Extension(
         name='rankfm._rankfm',
         sources=['rankfm/_rankfm.{ext}'.format(ext=ext), 'rankfm/mt19937ar/mt19937ar.c'],
         extra_compile_args=compile_args,
-        extra_link_args=link_args
+        extra_link_args=link_args,
+        include_dirs=[get_numpy_include()],
     )
 ]
 
@@ -73,7 +78,6 @@ setup(
     license='GNU General Public License v3.0',
     packages=['rankfm'],
     ext_modules=extensions,
-    include_dirs=[numpy.get_include()],
     zip_safe=False,
     python_requires='>=3.8',
     install_requires=['numpy>=1.15', 'pandas>=0.24'],
